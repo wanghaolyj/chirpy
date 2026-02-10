@@ -218,7 +218,7 @@ exclude:
   - .DS_Store
   - blog
   - docker-compose.dev.yml
-  - _site
+  - assets/img/favicons/site.webmanifest
 
 jekyll-archives:
   enabled: [categories, tags]
