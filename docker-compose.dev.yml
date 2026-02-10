@@ -1,0 +1,22 @@
+services:
+  dev:
+    image: ruby:3.3
+    container_name: chirpy-dev
+    working_dir: /srv/jekyll
+    user: "0:0"
+    environment:
+      TZ: Asia/Shanghai
+      JEKYLL_ENV: development
+      BUNDLE_PATH: /usr/local/bundle
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/srv/jekyll
+      - bundle_cache:/usr/local/bundle
+    command: >
+      sh -lc " gem install bundler && bundle install && exec bundle exec jekyll serve --host 0.0.0.0 --port 4000 --watch --force_polling --trace "
+
+volumes:
+  bundle_cache:
+
+

@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.dev.yml}"
+TZ_NAME="${TZ_NAME:-Asia/Shanghai}"
+BLOG_URL="${BLOG_URL:-http://localhost:4000}"
+
+usage() {
+  cat <<EOF
+用法:
+  ./blog dev                  启动本地预览（docker compose，强制重建/重启）
+  ./blog open                 打开本地预览：$BLOG_URL
+  ./blog down                 停止本地预览
+  ./blog logs                 查看日志
+  ./blog sh                   进入容器
+  ./blog clean                清理 _site / 缓存
+
+  ./blog new "标题"           新建文章：_posts/年/月/年-月-日-标题.md
+                              图片目录：assets/img/年/月
+                              自动用 VS Code 打开
+  ./blog new --draft "标题"   新建草稿：_drafts/年/月/年-月-日-标题.md（同样建图片目录并打开）
+
+可选环境变量:
+  TZ_NAME=Asia/Tokyo          设置时间/时区（默认 Asia/Shanghai）
+  BLOG_URL=http://127.0.0.1:4000  open 用的 URL（默认 http://localhost:4000）
+  COMPOSE_FILE=...            指定 compose 文件（默认 docker-compose.dev.yml）
+EOF
+}
+
+ensure_compose_file() {
+  if [[ ! -f "$COMPOSE_FILE" ]]; then
+    echo "❌ 找不到 $COMPOSE_FILE（请在博客源码根目录运行）"
+    exit 1
+  fi
+}
+
+slugify_filename() {
+  # 保留中文，去危险字符；空白->-；合并-
+  printf '%s' "$1" \
+    | tr '\n\r\t' '   ' \
+    | sed -E 's/[[:space:]]+/-/g; s/[\/\\:\*\?"<>|]+//g; s/--+/-/g; s/^-|-$//g'
+}
+
+cmd_dev() {
+  ensure_compose_file
+  docker compose -f "$COMPOSE_FILE" up --build --force-recreate
+}
+
+cmd_down() {
+  ensure_compose_file
+  docker compose -f "$COMPOSE_FILE" down
+}
+
+cmd_logs() {
+  ensure_compose_file
+  docker compose -f "$COMPOSE_FILE" logs -f --tail=200
+}
+
+cmd_sh() {
+  ensure_compose_file
+  docker compose -f "$COMPOSE_FILE" exec dev bash
+}
+
+cmd_open() {
+  local url="$BLOG_URL"
+
+  if command -v open >/dev/null 2>&1; then
+    open "$url"                          # macOS
+  elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$url"                      # Linux
+  elif command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe Start-Process "$url"  # WSL
+  else
+    echo "⚠️ 无法自动打开浏览器，请手动访问：$url"
+  fi
+}
+
+cmd_clean() {
+  echo "🧹 清理构建产物与缓存..."
+  rm -rf _site .jekyll-cache .sass-cache .jekyll-metadata .bundle vendor/bundle 2>/dev/null || true
+  echo "✅ 已清理：_site / .jekyll-cache / .sass-cache 等"
+}
+
+cmd_new() {
+  local is_draft=0
+
+  if [[ "${1:-}" == "--draft" || "${1:-}" == "-d" ]]; then
+    is_draft=1
+    shift || true
+  fi
+
+  local title="${*:-}"
+  if [[ -z "$title" ]]; then
+    echo "❌ 用法:"
+    echo "  ./blog new \"文章标题\""
+    echo "  ./blog new --draft \"草稿标题\""
+    exit 1
+  fi
+
+  local year month date_ymd date_full safe_title post_dir img_dir file
+  year="$(TZ="$TZ_NAME" date +%Y)"
+  month="$(TZ="$TZ_NAME" date +%m)"
+  date_ymd="$(TZ="$TZ_NAME" date +%F)"
+  date_full="$(TZ="$TZ_NAME" date +"%Y-%m-%d %H:%M:%S %z")"
+  safe_title="$(slugify_filename "$title")"
+
+  if [[ "$is_draft" == "1" ]]; then
+    post_dir="_drafts/${year}/${month}"
+  else
+    post_dir="_posts/${year}/${month}"
+  fi
+
+  img_dir="assets/img/${year}/${month}"
+  file="${post_dir}/${date_ymd}-${safe_title}.md"
+
+  mkdir -p "$post_dir" "$img_dir"
+
+  if [[ -f "$file" ]]; then
+    echo "❌ 已存在：$file"
+    exit 1
+  fi
+
+  cat > "$file" <<EOF
+---
+title: "${title}"
+date: ${date_full}
+categories: []
+tags: []
+---
+
+正文开始 👇
+
+## 图片示例
+
+把图片放到：\`${img_dir}/\`
+
+示例：
+
+![demo](/${img_dir}/demo.png)
+
+EOF
+
+  if [[ "$is_draft" == "1" ]]; then
+    echo "✅ 已创建草稿：$file"
+  else
+    echo "✅ 已创建文章：$file"
+  fi
+  echo "🖼️ 图片目录：$img_dir"
+
+  if command -v code >/dev/null 2>&1; then
+    code "$file" "$img_dir"
+  else
+    echo "⚠️ 未检测到 VS Code 的 code 命令，未自动打开"
+    echo "   macOS: VS Code -> Cmd+Shift+P -> Install 'code' command in PATH"
+  fi
+}
+
+main() {
+  local cmd="${1:-}"
+  shift || true
+
+  case "$cmd" in
+    dev)    cmd_dev ;;
+    open)   cmd_open ;;
+    down)   cmd_down ;;
+    logs)   cmd_logs ;;
+    sh)     cmd_sh ;;
+    clean)  cmd_clean ;;
+    new)    cmd_new "$@" ;;
+    ""|-h|--help|help) usage ;;
+    *) echo "❌ 未知命令: $cmd"; usage; exit 1 ;;
+  esac
+}
+
+main "$@"
+
