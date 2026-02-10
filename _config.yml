@@ -218,7 +218,6 @@ exclude:
   - .DS_Store
   - blog
   - docker-compose*.yml
-  - assets/img/favicons/site.webmanifest
   - update.sh
   - upgrade.sh
 
