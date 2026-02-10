@@ -218,6 +218,7 @@ exclude:
   - .DS_Store
   - blog
   - docker-compose.dev.yml
+  - _site
 
 jekyll-archives:
   enabled: [categories, tags]
