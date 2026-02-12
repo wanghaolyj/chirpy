@@ -28,3 +28,6 @@ assets/js/dist
 
 # MAC
 .DS_Store
+
+deploy_key
+deploy_key.pub
